@@ -1,3 +1,4 @@
+import httpx
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
@@ -24,3 +25,15 @@ class InMemoryTransport(Transport):
         node = self.secondary_nodes.get(node_id)
         if node:
             return node.replicate(message)
+
+class HttpTransport(Transport):
+
+    def __init__(self, timeout: float = 30.0):
+        self.timeout = timeout
+
+    async def send(self, node_id: str, message: str) -> str:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.post(f'{node_id}/replicate', json={"message": message})
+            response.raise_for_status()
+
+            return response.json()["ack"]
