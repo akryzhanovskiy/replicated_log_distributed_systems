@@ -1,0 +1,29 @@
+services:
+  master:
+    build: .
+    command: uvicorn replicated_log.master_app:app --host 0.0.0.0 --port 8000
+    environment:
+      SECONDARIES: "http://secondary1:8000, http://secondary2:8000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - secondary1
+      - secondary2
+
+  secondary1:
+    build: .
+    command: uvicorn replicated_log.secondary_app:app --host 0.0.0.0 --port 8000
+    environment:
+      NODE_ID: "secondary1"
+      DELAY: "2"
+    ports:
+      - "8001:8000"
+
+  secondary2:
+    build: .
+    command: uvicorn replicated_log.secondary_app:app --host 0.0.0.0 --port 8000
+    environment:
+      NODE_ID: "secondary2"
+      DELAY: "3"
+    ports:
+      - "8002:8000"
