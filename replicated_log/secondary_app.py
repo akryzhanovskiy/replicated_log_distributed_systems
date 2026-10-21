@@ -19,12 +19,13 @@ secondary_node = SecondaryNode(node_id, float(delay))
 app = FastAPI()
 
 class ReplicateRequest(BaseModel):
+    seq: int
     message: str
 
 
 @app.post('/replicate')
 async def replicate(request: ReplicateRequest):
-    return {'ack': await secondary_node.replicate(request.message)}
+    return {'ack': await secondary_node.replicate(request.seq, request.message)}
 
 @app.get('/messages')
 def list_messages():
