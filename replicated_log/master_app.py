@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 
 secondaries = os.getenv('SECONDARIES', '')
 
-secondary_ids = [x.strip() for x in secondaries.split(',')]
+
+secondary_ids = [x.strip() for x in secondaries.split(',') if x.strip()]
 master_node = MasterNode(secondary_ids, HttpTransport())
 
 logger.info("Master started with secondaries: %s", secondary_ids)
@@ -25,12 +26,15 @@ app = FastAPI()
 
 class MessageRequest(BaseModel):
     message: str
+    w: int
 
 @app.post('/messages')
 async def append(request: MessageRequest):
     try:    
-        await master_node.append(request.message)
-        return {"status": "ok"}
+        await master_node.append(request.message, request.w)
+        return {"status": "ok", "w": request.w}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
 

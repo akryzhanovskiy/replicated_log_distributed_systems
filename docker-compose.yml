@@ -15,7 +15,7 @@ services:
     command: uvicorn replicated_log.secondary_app:app --host 0.0.0.0 --port 8000
     environment:
       NODE_ID: "secondary1"
-      DELAY: "2"
+      DELAY: "0"
     ports:
       - "8001:8000"
 
@@ -24,6 +24,6 @@ services:
     command: uvicorn replicated_log.secondary_app:app --host 0.0.0.0 --port 8000
     environment:
       NODE_ID: "secondary2"
-      DELAY: "3"
+      DELAY: "8"
     ports:
       - "8002:8000"
