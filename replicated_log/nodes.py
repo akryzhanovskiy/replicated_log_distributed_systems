@@ -37,34 +37,57 @@ class MasterNode:
     secondary_node_ids: list[str]
     transport: Transport
     messages: list[str]
+    _background_tasks: set
 
     def __init__(self, secondary_nodes_ids: list[str], transport: Transport):
         self.secondary_node_ids = secondary_nodes_ids
         self.transport = transport
         self.messages = []
+        self._background_tasks = set() 
 
-    async def append(self, message: str) -> None:
-        self.messages.append(message)
+    async def append(self, message: str, w: int | None = None) -> None:
+        if w is None:
+            w = len(self.secondary_node_ids) + 1
+        if 1 <= w <= len(self.secondary_node_ids) + 1:
+            self.messages.append(message)
+            tasks = []
+            for node_id in self.secondary_node_ids:
+                task = asyncio.create_task(
+                    self._replicate_to(node_id, message)
+                )
+                self._background_tasks.add(task)
+                task.add_done_callback(self._background_tasks.discard)
+                tasks.append(task)
 
-        results = await asyncio.gather(
-            *(self.transport.send(node_id, message) for node_id in self.secondary_node_ids), 
-            return_exceptions=True
-            )
+            if w == 1:
+                logger.info(f"message {message} ACKed successfully with {w} node")
+                return
 
-        failures = {}
-        for node_id, result in zip(self.secondary_node_ids, results):
-            if isinstance(result, BaseException):
-                failures[node_id] = repr(result)
-            elif result != message:
-                failures[node_id] = f"unexpected response: {result!r}"
+            got_ack_count = 0
+            for next_done in asyncio.as_completed(tasks):
+                try:
+                    await next_done
+                    got_ack_count += 1
+                    if got_ack_count == w - 1:
+                        logger.info(f"message {message} ACKed successfully with {got_ack_count} nodes")
+                        return
+                except Exception as e:
+                    logger.warning("Replication of %r failed: %s", message, e)
 
-        if failures:
-            for node_id, reason in failures.items():
-                logger.warning("Replication of %r to %s failed: %s", message, node_id, reason)
-            raise RuntimeError(f"Replication failed for: {', '.join(failures)}")
+            
+            raise RuntimeError(f"only {got_ack_count} of {w - 1} required ACKs received")
+                
+        else:
+            raise ValueError(f"w must be between 1 and {len(self.secondary_node_ids)}, got {w}")
+            
 
-        logger.info("Message %r replicated to all %d secondaries", message, len(results))
 
     def list_msgs(self) -> list[str]:
         return list(self.messages)
+
+    async def _replicate_to(self, node_id: str, message: str) -> None:
+        result = await self.transport.send(node_id, message)
+        if result != message:
+            raise RuntimeError(f"unexpected response: {result!r} for node {node_id}")
+        logger.info("message %s ACKed by %s", message, node_id)
             
